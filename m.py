@@ -7,6 +7,10 @@ from PIL import Image
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 
+from keras import config
+config.enable_unsafe_deserialization()
+
+
 def parse_label_file(label_file):
     box = None
     max_class_id = 0
@@ -104,8 +108,8 @@ def create_dataset(image_dir, label_dir, target_size=(224, 224), batch_size=32):
                     except Exception as e:
                         print(f"Skipping corrupted files: {image_path} - Error: {e}")
                 
-                # if len(image_paths) >= 2000:  # Debug with smaller dataset
-                #     break
+                if len(image_paths) >= 2000:  # Debug with smaller dataset
+                    break
     except OSError as e:
         raise RuntimeError(f"Error reading directory: {e}")
     
@@ -149,21 +153,30 @@ if not os.path.exists('model.keras'):
 
     # print the shape of the dataset
     print(dataset.take(1).element_spec[0].shape[1])
-    
-    list(dataset)
 
+
+    num_classes = 2
     # train the model
     model = tf.keras.Sequential([
-        # Replace the first Conv2D layer with an Input layer followed by Conv2D
         tf.keras.layers.Input(shape=(224, 224, 3)),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        # Feature extraction layers
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        # Flatten and dense layers
         tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(1024, activation='relu'),
+        tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(512, activation='relu'),
-        tf.keras.layers.Dense(1 * 5),
+        # Output layer: 5 values (class, cx, cy, w, h)
+        tf.keras.layers.Dense(5, activation='sigmoid'),  # sigmoid for coordinates
+        tf.keras.layers.Lambda(lambda x: tf.concat([
+            tf.cast(tf.round(x[..., 0:1] * num_classes), tf.float32),  # class_id (rounded integer)
+            x[..., 1:]  # box coordinates (continuous values 0-1)
+        ], axis=-1)),
         tf.keras.layers.Reshape((1, 5))
     ])
 
@@ -174,8 +187,6 @@ if not os.path.exists('model.keras'):
         metrics=['mae']  # Mean absolute error
     )
 
-    # print the shape of the dataset
-    print(dataset.shape)
     # train the model
     history = model.fit(dataset, epochs=2)
 
@@ -186,19 +197,30 @@ else:
     model = tf.keras.models.load_model('model.keras') # Switch to .keras for compatibility
 
 # Load the testing dataset
-# image_dir = './data/test/images'
-# label_dir = './data/test/labels'
-# test_dataset = create_dataset(image_dir, label_dir, target_size=(224, 224), batch_size=32)
+image_dir = './data/test/images'
+label_dir = './data/test/labels'
+test_dataset = create_dataset(image_dir, label_dir, target_size=(224, 224), batch_size=32)
 
-# # Make predictions
-# predictions = model.predict(test_dataset)
+# Make predictions
+predictions = model.predict(test_dataset)
 
-# # Get ground truth labels from test dataset
-# ground_truth = np.vstack([y for x, y in test_dataset])
+# Get ground truth labels from test dataset
+ground_truth = np.vstack([y for x, y in test_dataset])
 
-# # # Calculate mAP
-# # mae_loss = tf.keras.losses.MeanAbsoluteError()
-# # print(mae_loss(ground_truth, predictions))
+# sum all the predictions where the class is 1
+predictions_sum = np.sum(predictions[ground_truth[:, 0] == 1])
+
+# sum all the ground truth where the class is 1
+ground_truth_sum = np.sum(ground_truth[ground_truth[:, 0] == 1])
+
+# calculate the accuracy
+accuracy = predictions_sum / ground_truth_sum
+
+print(accuracy)
+
+# # Calculate mAP
+# mae_loss = tf.keras.losses.MeanAbsoluteError()
+# print(mae_loss(ground_truth, predictions))
 
 # print(predictions)
 # print(ground_truth)
@@ -227,7 +249,7 @@ def plot_predictions(predictions, image_paths):
         box = pred_box[0]  # Get first (and only) box since model outputs shape [batch, 1, 5]
         
         # Extract coordinates and convert to absolute pixels
-        xmin, ymin, xmax, ymax, class_id = box
+        class_id, xmin, ymin, xmax, ymax = box
         
         # Plot the rectangle using absolute coordinates
         width = (xmax - xmin) * image.shape[1]
@@ -241,6 +263,8 @@ def plot_predictions(predictions, image_paths):
             color='red',
             linewidth=2
         ))
+
+        print("Detects ", class_id, " at ", xmin, ymin, xmax, ymax)
         
         plt.axis('off')
         plt.show()
