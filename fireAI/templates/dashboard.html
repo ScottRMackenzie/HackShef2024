@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Fire Detection Bot System</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+        .camera-feed {
+            width: 300px;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('home') }}">Fire Detection Bot</a>
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Dashboard Container -->
+    <div class="container mt-5">
+        <h1 class="mb-4">Dashboard</h1>
+        
+        <!-- Overview Cards -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Cameras</h5>
+                        <p class="card-text display-4">{{ total_cameras }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-danger">
+                    <div class="card-body">
+                        <h5 class="card-title">Active Alerts</h5>
+                        <p class="card-text display-4">{{ active_alerts }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h5 class="card-title">System Status</h5>
+                        <p class="card-text">{{ system_status }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Camera Feeds Section -->
+        <h3 class="mb-3">Live Camera Feeds</h3>
+        <div class="row" id="camera-feeds">
+            {% for camera in cameras %}
+            <div class="col-md-4 mb-4" id="camera-{{ camera['camera_id'] }}">
+                <div class="card">
+                    <img id="camera-feed-{{ camera['camera_id'] }}" src="/camera/getview/{{ camera['camera_id'] }}" class="card-img-top" alt="Live Feed">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ camera['camera_name'] }}</h5>
+                        <button class="btn btn-danger" onclick="deleteCamera({{ camera['camera_id'] }})">Delete Camera</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="card-footer text-end">
+            <button class="btn btn-primary" onclick="refreshAll()">Refresh</button>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center mt-5 bg-dark text-white py-4">
+        <p>&copy; 2024 Fire Detection Bot System. All rights reserved.</p>
+    </footer>
+
+    <!-- Bootstrap JS and Refresh Script -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to refresh the feed for a specific camera
+        function refreshFeed(cameraId) {
+            let imgElement = document.getElementById(`camera-feed-${cameraId}`);
+            
+            // If the element doesn't exist, create it
+            if (!imgElement) {
+                imgElement = document.createElement('img');
+                imgElement.src = `/camera/getview/${cameraId}`;
+                imgElement.alt = 'Live Feed';
+                imgElement.className = 'img-fluid';
+                imgElement.id = `camera-feed-${cameraId}`;
+                document.getElementById(`camera-feeds`).appendChild(imgElement);
+            }
+
+            // Refresh the image with a timestamp to avoid caching
+            if (imgElement) {
+                imgElement.src = `/camera/getview/${cameraId}?t=${new Date().getTime()}`;
+            }
+        }
+
+        // Auto-refresh camera feeds every 5 seconds
+        function refreshAll() {
+            {% for camera in cameras %}
+                refreshFeed({{ camera["camera_id"] }});
+            {% endfor %}
+        }
+        
+        setInterval(() => {
+            refreshAll()
+        }, 500); // refresh every 5 seconds
+
+        // Function to delete a camera view
+        function deleteCamera(cameraId) {
+            // Confirm the delete action
+            if (confirm("Are you sure you want to delete this camera?")) {
+                fetch(`/camera/delete/${cameraId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // Remove the camera from the DOM
+                        document.getElementById(`camera-${cameraId}`).remove();
+                        alert("Camera deleted successfully.");
+                    } else {
+                        alert("Failed to delete camera.");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert("An error occurred while deleting the camera.");
+                });
+            }
+        }
+    </script>
+</body>
+</html>

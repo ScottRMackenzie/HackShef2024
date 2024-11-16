@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Image</title>
+    <style>
+        /* Style the image */
+        #cameraImage {
+            max-width: 100%;
+            height: auto;
+            transition: opacity 0.5s ease-in-out; /* Smooth fade transition */
+        }
+
+        /* Hide the image by default when loading */
+        /* #cameraImage.loading {
+            opacity: 0;
+        } */
+    </style>
+    <script>
+        // Function to refresh the image every 500 milliseconds (adjust as needed)
+        function refreshImage() {
+            const cameraId = '{{ camera_id }}'; // Flask template variable for camera_id
+            const imgElement = document.getElementById('cameraImage');
+
+            // Set the image to "loading" state to trigger opacity change
+            imgElement.classList.add('loading');
+
+            // Create a new image object to preload the image before displaying it
+            const newImg = new Image();
+            newImg.src = `/camera/getview/${cameraId}?t=${new Date().getTime()}`; // Add timestamp to avoid caching
+
+            // Once the new image is loaded, replace the old image and fade it in
+            newImg.onload = function() {
+                imgElement.src = newImg.src;  // Set the new image source
+                imgElement.classList.remove('loading');  // Fade in the image smoothly
+            };
+        }
+
+        // Refresh every 500 milliseconds (0.5 seconds)
+        setInterval(refreshImage, 100); // Refresh every 500 ms for smooth updates
+    </script>
+</head>
+<body onload="refreshImage()">
+    <h1>Live Camera Feed</h1>
+    <img id="cameraImage" class="loading" src="" alt="Camera Image" />
+</body>
+</html>
