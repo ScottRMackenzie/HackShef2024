@@ -4,7 +4,7 @@ import numpy as np
 from keras.models import load_model
 
 # Load the trained model
-model = load_model('fire_detection_model.h5')
+model = load_model('fire_detection_model.keras')
 
 # Define the size of the input images
 img_size = (224, 224)

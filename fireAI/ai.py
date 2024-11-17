@@ -1,127 +1,152 @@
+import random
 import tensorflow as tf
 import numpy as np
 import os
 import cv2
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Input
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.losses import MeanSquaredError
+
+# Ask the user whether to train the model or load an existing one
+train_model_choice = input("Do you want to train the model? (y/n): ").strip().lower()
 
 # Define paths to the image and label directories
 image_dir = "./data/train/images"
 label_dir = "./data/train/labels"
+max_boxes = 5  # Maximum number of bounding boxes per image
 
-# Helper function to load data
-def load_data(image_dir, label_dir):
-    images = []
-    bboxes = []
+### Step 1: Load Data Function with Normalization
+def load_data(image_dir, label_dir, max_images=2000, max_boxes=5):
+    images, bboxes, labels = [], [], []
     
-    # Loop through each image
-    for image_name in os.listdir(image_dir):
-        if image_name.endswith(".jpg"):
-            # Load the image
-            image_path = os.path.join(image_dir, image_name)
-            img = cv2.imread(image_path)
-            img = cv2.resize(img, (224, 224))  # Resize to standard size (224x224)
-            images.append(img)
-            
-            # Load the corresponding label file
-            label_path = os.path.join(label_dir, image_name.replace(".jpg", ".txt"))
+    all_images = [img for img in os.listdir(image_dir) if img.endswith(".jpg")]
+    random.shuffle(all_images)
+    selected_images = all_images[:max_images]
+
+    for image_name in selected_images:
+        image_path = os.path.join(image_dir, image_name)
+        img = cv2.imread(image_path)
+        if img is None:
+            print(f"Error loading image: {image_path}")
+            continue
+        img = cv2.resize(img, (224, 224))
+        images.append(img)
+
+        label_path = os.path.join(label_dir, image_name.replace(".jpg", ".txt"))
+        bbox_list = []
+        try:
             with open(label_path, 'r') as f:
-                label = f.readlines()
-                
-            # Initialize bounding boxes list
-            bbox_list = []
-            
-            if len(label) == 0:  # No bounding boxes detected in the image
-                bbox_list.append([0, 0, 0, 0])  # All zeros if no object
-            else:
-                for line in label:
+                labels = f.readlines()
+                for line in labels:
                     parts = line.strip().split()
-                    if len(parts) == 5:  # We have a valid bounding box
-                        class_id, center_x, center_y, width, height = map(float, parts)
-                        # Convert normalized coordinates to pixel values
+                    if len(parts) == 5:
+                        _, center_x, center_y, width, height = map(float, parts)
                         bbox = [
-                            int((center_x - width / 2) * 224),  # xmin
-                            int((center_y - height / 2) * 224),  # ymin
-                            int((center_x + width / 2) * 224),   # xmax
-                            int((center_y + height / 2) * 224)   # ymax
+                            (center_x - width / 2),  # xmin
+                            (center_y - height / 2), # ymin
+                            (center_x + width / 2),  # xmax
+                            (center_y + height / 2)  # ymax
                         ]
                         bbox_list.append(bbox)
-            
-            # If no bounding boxes, append the all-zero bbox list
-            if not bbox_list:
-                bbox_list = [[0, 0, 0, 0]]  # Ensure there's at least a "no object" label
-            
-            # Append the list of bounding boxes for this image
-            bboxes.append(bbox_list)
-    
-    # Convert images and bounding boxes into numpy arrays
-    return np.array(images), np.array(bboxes)
+        except FileNotFoundError:
+            print(f"Label file not found for image: {image_name}")
 
-# Load data
-images, labels = load_data(image_dir, label_dir)
+        while len(bbox_list) < max_boxes:
+            bbox_list.append([-244, -244, -244, -244])
+        bboxes.append(bbox_list[:max_boxes])
 
-# Normalize images
-images = images / 255.0  # Normalize pixel values between 0 and 1
+    return np.array(images) / 255.0, np.array(bboxes)
 
-# Model to predict bounding boxes
-def create_model():
+if train_model_choice == "y":
+    images, labels = load_data(image_dir, label_dir, max_boxes=max_boxes)
+
+### Step 2: Define an Improved Model Architecture
+def create_model(max_boxes=5):
     model = Sequential([
-        Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+        Input(shape=(224, 224, 3)),  # Define the input shape as (224, 224, 3)
+        Conv2D(32, (3, 3), activation='relu'),
         MaxPooling2D((2, 2)),
         Conv2D(64, (3, 3), activation='relu'),
         MaxPooling2D((2, 2)),
         Conv2D(128, (3, 3), activation='relu'),
         MaxPooling2D((2, 2)),
+        Conv2D(256, (3, 3), activation='relu'),
+        MaxPooling2D((2, 2)),
         Flatten(),
-        Dense(128, activation='relu'),
-        Dense(4)  # Predict 4 values (xmin, ymin, xmax, ymax) for bounding box
+        Dense(256, activation='relu'),
+        Dropout(0.5),
+        Dense(max_boxes * 4, activation='sigmoid')  # Output normalized coordinates for max_boxes
     ])
-    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['accuracy'])
     return model
 
-# Create the model
-model = create_model()
+### Step 3: Custom Loss Function (if needed)
+# Not required in this example, but can be customized further
+def custom_loss(y_true, y_pred):
+    return MeanSquaredError()(y_true, y_pred)
 
-# Train the model
-model.fit(images, labels, epochs=10, batch_size=4)
+if train_model_choice == "y":
+    model = create_model(max_boxes=max_boxes)
+    model.fit(images, labels.reshape(-1, max_boxes * 4), epochs=10, batch_size=8)
+    model.save('improved_bbox_model.keras')
+    print("Model saved to 'improved_bbox_model.keras'")
 
-# Save the model
-model.save('bounding_box_model.h5')
-print("Model saved to 'bounding_box_model.h5'")
+### Step 4: Load the Model
+try:
+    model = tf.keras.models.load_model('improved_bbox_model.keras')
+    print("Model loaded successfully.")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    model = None
 
-# Example of using the trained model to predict on a new image
-def predict_bounding_box(image_path):
-    # Load the saved model
-    model = tf.keras.models.load_model('bounding_box_model.h5')
-    
-    # Preprocess the image
+### Step 5: Enhanced Prediction Function with Thresholding
+def predict_bounding_boxes(image_path, model, max_boxes=5, threshold=0.1):
     img = cv2.imread(image_path)
+    if img is None:
+        print(f"Error loading image: {image_path}")
+        return
+
     img_resized = cv2.resize(img, (224, 224)) / 255.0
     img_resized = np.expand_dims(img_resized, axis=0)
-    
-    # Get the predicted bounding box
-    prediction = model.predict(img_resized)
-    
-    # Denormalize back to image size
-    pred_bbox = prediction[0]
-    xmin, ymin, xmax, ymax = pred_bbox
-    xmin = int(xmin * 224)
-    ymin = int(ymin * 224)
-    xmax = int(xmax * 224)
-    ymax = int(ymax * 224)
-    
-    # Draw the bounding box on the image
-    img = cv2.imread(image_path)
-    
-    # Check if the prediction is all zeros (indicating no object)
-    if xmin == 0 and ymin == 0 and xmax == 0 and ymax == 0:
-        print("No object detected in the image.")
-    else:
+    predictions = model.predict(img_resized)[0].reshape(max_boxes, 4)
+
+    height, width, _ = img.shape
+
+    for bbox in predictions:
+        xmin, ymin, xmax, ymax = bbox
+
+        # Skip boxes with very small size (near zero) and confidence threshold
+        if xmin == 0 and ymin == 0 and xmax == 0 and ymax == 0:
+            continue  # No box detected
+        
+        # Apply thresholding to filter out weak predictions
+        if (xmax - xmin) < threshold or (ymax - ymin) < threshold:
+            continue  # Skip small boxes (likely false positives)
+
+        # Scale the bounding box coordinates to original image size
+        xmin, xmax = int(xmin * width), int(xmax * width)
+        ymin, ymax = int(ymin * height), int(ymax * height)
+
+        # Ensure bounding box is within image bounds
+        xmin = max(0, xmin)
+        ymin = max(0, ymin)
+        xmax = min(width, xmax)
+        ymax = min(height, ymax)
+
         cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-    
-    cv2.imshow("Predicted Bounding Box", img)
-    cv2.waitKey(0)
+
+    cv2.imshow("Bounding Box Predictions", img)
+    cv2.waitKey(500)
     cv2.destroyAllWindows()
 
-# Example of predicting on an image
-predict_bounding_box('.\data\test\images\AoF06723.jpg')
+### Step 6: Predict on Random Images
+def predict_random_images(image_dir, model, num_images=10):
+    all_images = [img for img in os.listdir(image_dir) if img.endswith('.jpg')]
+    random_images = random.sample(all_images, num_images)
+    for image_name in random_images:
+        image_path = os.path.join(image_dir, image_name)
+        predict_bounding_boxes(image_path, model)
+
+if model:
+    predict_random_images('./data/train/images', model, num_images=100)
