@@ -151,10 +151,6 @@ def view_camera(camera_id):
     
     return render_template("camera.html", user=session["user"],camera_id = camera_id)  # Display profile page
 
-# Directory to save received images (optional)
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 @app.route('/camera/getview/<camera_id>', methods=['GET'])
 def get_camera_image(camera_id):
     if "user" not in session:
@@ -189,15 +185,8 @@ def upload(camera_id):
         # Process base64 image
         image_data = data['image']
         image_bytes = base64.b64decode(image_data.split(',')[1])
-        
-        # Convert bytes to numpy array for prediction
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        # Run prediction
-        img_resized = cv2.resize(img, (224, 224)) / 255.0
-        pred = model.predict(np.expand_dims(img_resized, axis=0))
-        pred_prob = float(pred[0][0])
+        latitude = float(data['location']['latitude'])
+        longitude = float(data['location']['longitude'])
 
         # Save image and update database
         cameras_collection.update_one(
@@ -206,28 +195,51 @@ def upload(camera_id):
                 "$set": {
                     "image": image_bytes,
                     "last_updated": datetime.now(),
-                    "fire_probability": pred_prob
+                    "latitude": latitude,
+                    "longitude": longitude
                 }
             },
             upsert=True
         )
 
-        # Create alert if fire probability is high
-        if pred_prob > 0.9:
-            alerts_collection.insert_one({
-                "camera_id": camera_id,
-                "timestamp": datetime.now(),
-                "fire_prob": pred_prob
-            })
-
         return jsonify({
             'message': 'Image processed successfully',
-            'fire_probability': pred_prob
         }), 200
 
     except Exception as e:
         print(f"Error processing image: {e}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/predict/<camera_id>', methods=['POST'])
+def predict_fire(camera_id):
+    camera = cameras_collection.find_one({"camera_id": int(camera_id)})
+    if camera and camera["image"]:
+        # Convert bytes to numpy array for prediction
+        nparr = np.frombuffer(camera["image"], np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        # Run prediction
+        img_resized = cv2.resize(img, (224, 224)) / 255.0
+        pred = model.predict(np.expand_dims(img_resized, axis=0))
+        pred_prob = float(pred[0][0])
+
+        google_maps_url = f"https://maps.google.com/maps?width=100%25&height=600&hl=en&q={camera['latitude']},{camera['longitude']}&t=&z=14&ie=UTF8&iwloc=B&output=embed"
+
+        if pred_prob > 0.9:
+            # Fire detected
+            # Save the alert to the MongoDB database
+            now = datetime.now()
+            alerts_collection.insert_one({
+                "camera_id": camera_id,
+                "timestamp": now,
+                "fire_prob": pred_prob,
+                "latitude": camera["latitude"],
+                "longitude": camera["longitude"]
+            })
+
+        return jsonify({"fire_prob": pred_prob, "google_maps_url": google_maps_url})
+
+    return jsonify({"error": "Image not found"}), 404
 
 @app.route('/camera/delete/<camera_id>', methods=['DELETE'])
 def delete_camera(camera_id):
