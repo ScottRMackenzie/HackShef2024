@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Feed with Location on Google Map</title>
+    <style>
+        body { text-align: center; margin-top: 50px; }
+        video, canvas { display: block; margin: 10px auto; }
+        #map-container { width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Camera Feed with Location and Google Map</h1>
+    <p>Camera ID: {{ camera_id }}</p>
+
+    <!-- Video element to show the camera feed -->
+    <video id="camera" autoplay playsinline width="640" height="480"></video>
+    <!-- Canvas element to capture a snapshot (hidden) -->
+    <canvas id="snapshot" width="640" height="480" style="display:none;"></canvas>
+
+    <!-- Information section -->
+    <p id="status"></p>
+    <p id="location"></p>
+    <p id="camera-direction"></p>
+
+    <!-- Google Map Embed -->
+    <div id="map-container">
+        <div style="width: 100%">
+            <iframe id="google-map" width="100%" height="300" frameborder="0" scrolling="no" marginheight="0" marginwidth="0"
+                    src="https://maps.google.com/maps?width=100%25&amp;height=600&amp;hl=en&amp;q=England&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=B&amp;output=embed">
+            </iframe>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('snapshot');
+        const context = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const locationText = document.getElementById('location');
+        const cameraDirectionText = document.getElementById('camera-direction');
+        const googleMapIframe = document.getElementById('google-map');
+        
+        let latitude = null;
+        let longitude = null;
+        let floor = "1st Floor"; // Example, can be dynamic
+        let cameraDirection = {
+            alpha: 0,  // Rotation around z-axis
+            beta: 0,   // Rotation around x-axis
+            gamma: 0   // Rotation around y-axis
+        };
+
+        // Flag to check if it's the first upload
+        let firstUpload = true;
+
+        // Function to start the camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                statusText.textContent = 'Error accessing camera';
+            }
+        }
+
+        // Function to get location (latitude and longitude) using the Geolocation API
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    latitude = position.coords.latitude;
+                    longitude = position.coords.longitude;
+                    locationText.textContent = `Location: Lat: ${latitude}, Long: ${longitude}`;
+                    updateGoogleMapIframe(latitude, longitude);  // Update iframe with new coordinates
+                }, (error) => {
+                    console.error('Error getting location:', error);
+                    locationText.textContent = 'Location: Unable to get location';
+                });
+            } else {
+                locationText.textContent = 'Geolocation is not supported by this browser.';
+            }
+        }
+
+        // Function to update the Google Maps iframe source with the current coordinates
+        function updateGoogleMapIframe(lat, lng) {
+            const mapUrl = `https://maps.google.com/maps?width=100%25&height=600&hl=en&q=${lat},${lng}&t=&z=14&ie=UTF8&iwloc=B&output=embed`;
+            googleMapIframe.src = mapUrl;
+        }
+
+        // Function to get the camera orientation using DeviceOrientation API
+        function getOrientation(event) {
+            cameraDirection.alpha = event.alpha;  // Rotation around z-axis
+            cameraDirection.beta = event.beta;    // Rotation around x-axis
+            cameraDirection.gamma = event.gamma;  // Rotation around y-axis
+
+            cameraDirectionText.textContent = `Camera Direction - Alpha: ${cameraDirection.alpha}, Beta: ${cameraDirection.beta}, Gamma: ${cameraDirection.gamma}`;
+        }
+
+        // Capture and send image to the API
+        async function captureAndSend() {
+            // Draw the current video frame onto the canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            // Create the data to send to the server
+            const data = {
+                image: imageData,
+                location: {
+                    latitude: latitude,
+                    longitude: longitude
+                },
+                floor: floor,
+                cameraDirection: cameraDirection
+            };
+
+            // Perform the POST request
+            try {
+                const response = await fetch(`/upload/camera/{{ camera_id }}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    // On the first upload, also update camera details in the database
+                    if (firstUpload) {
+                        await updateCameraInfo(data);
+                        firstUpload = false; // Mark that the first upload is complete
+                    }
+
+                    statusText.textContent = `Image sent successfully at ${new Date().toLocaleTimeString()}`;
+                } else {
+                    statusText.textContent = 'Failed to send image.';
+                }
+            } catch (err) {
+                console.error('Error sending image:', err);
+                statusText.textContent = 'Error sending image';
+            }
+        }
+
+        // Function to update camera information on the first upload
+        async function updateCameraInfo(data) {
+            try {
+                const updateResponse = await fetch(`/camera/update/{{ camera_id }}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (updateResponse.ok) {
+                    console.log('Camera information updated successfully.');
+                } else {
+                    console.error('Failed to update camera information.');
+                }
+            } catch (err) {
+                console.error('Error updating camera information:', err);
+            }
+        }
+
+        // Automatically capture and send the image every 10 seconds
+        function startSendingImages() {
+            setInterval(captureAndSend, 1000); // 10,000 ms = 10 seconds
+        }
+
+        // Initialize
+        startCamera().then(() => {
+            startSendingImages();
+            getLocation();
+            window.addEventListener('deviceorientation', getOrientation);
+        });
+    </script>
+
+</body>
+</html>
