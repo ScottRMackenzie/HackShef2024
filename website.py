@@ -86,6 +86,8 @@ def callback():
 
 @app.route("/login")
 def login():
+    if "user" in session:
+        return redirect(url_for("home"))  # If user is already logged in, redirect to home
     # Redirect user to Auth0 login page
     return oauth.auth0.authorize_redirect(
         redirect_uri=url_for("callback", _external=True)  # Redirect to callback route after login
@@ -219,7 +221,7 @@ def predict_fire(camera_id):
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         # Run prediction
-        img_resized = cv2.resize(img, (224, 224)) / 255.0
+        img_resized = cv2.resize(img, (224, 224)) / (255.0 * 3)
         pred = model.predict(np.expand_dims(img_resized, axis=0))
         pred_prob = float(pred[0][0])
 
@@ -267,7 +269,7 @@ def alerts():
     now = datetime.now()
     # Get all alerts from the MongoDB database that are less than than 2 minutes old
     five_minutes_ago = now - timedelta(minutes=5)
-    alerts = list(alerts_collection.find({"timestamp": {"$gt": five_minutes_ago}}))
+    alerts = list(alerts_collection.find({"timestamp": {"$gt": five_minutes_ago}}))[::-1]
 
     # Convert ObjectId to string
     for alert in alerts:
