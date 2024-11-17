@@ -16,6 +16,20 @@
             max-width: 800px;
             margin: auto;
         }
+        .hero {
+            background: url('https://example.com/fire-detection.jpg') no-repeat center center;
+            background-size: cover;
+            color: white;
+            padding: 100px 20px;
+            border-radius: 10px;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        .hero p {
+            font-size: 1.5rem;
+        }
         footer {
             background-color: #343a40;
             color: white;
@@ -43,26 +57,31 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                     </li>
-
                 {% endif %}
             </ul>
         </div>
     </nav>
 
+    <!-- Hero Section -->
+    <div class="hero">
+        <h1>Welcome to the Fire Detection Bot System</h1>
+        <p>Protecting your environment with advanced AI technology.</p>
+        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg mt-3">Get Started</a>
+    </div>
+
     <!-- Main Content -->
     <div class="container mt-5">
-        <h1 class="mb-4">Welcome to the Fire Detection Bot System</h1>
+        <h3>How It Works</h3>
         <p class="lead">
             Our automated fire detection system helps you set up cameras to monitor for fire hazards in real-time. Using advanced AI technology, our system continuously monitors your environment and sends alerts when potential fires are detected.
         </p>
         <hr>
-        <h3>How It Works</h3>
         <p>
+            <strong>Features:</strong><br>
             - Set up cameras using your browser.<br>
             - Monitor live camera feeds from anywhere.<br>
             - Get instant alerts if a fire is detected.<br>
         </p>
-        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg mt-3">Get Started</a>
     </div>
 
     <!-- Footer -->
