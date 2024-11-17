@@ -63,8 +63,8 @@
                     <!-- Prediction display area -->
                     <div id="prediction-{{ camera['camera_id'] }}" class="fire-probability">Loading...</div>
                     <div id="map-container">
-                        <div style="width: 200px">
-                            <iframe id="google-map-{{ camera['camera_id'] }}" width="100%" height="300" frameborder="0" scrolling="no" marginheight="0" marginwidth="0"
+                        <div style="width: 80%; padding: 10px;">
+                            <iframe id="google-maps-{{ camera['camera_id'] }}" width="100%" height="200px" frameborder="0" scrolling="no" marginheight="0" marginwidth="0"
                                     src="https://maps.google.com/maps?width=100%25&amp;height=600&amp;hl=en&amp;q=England&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=B&amp;output=embed">
                             </iframe>
                         </div>
@@ -141,6 +141,7 @@
             }
         }
 
+        let location_updated = [];
         // Fetch fire prediction and update the UI
         function fetchPrediction(cameraId) {
             fetch(`/predict/${cameraId}`, {
@@ -150,13 +151,16 @@
             .then(data => {
                 const predictionElement = document.getElementById(`prediction-${cameraId}`);
                 const googleMapsElement = document.getElementById(`google-maps-${cameraId}`);
+
                 if (data.fire_prob !== undefined) {
                     predictionElement.innerHTML = `Fire Probability: ${data.fire_prob.toFixed(2)}`;
                 } else {
                     predictionElement.innerHTML = "Prediction failed. Image not found.";
                 }
-                if (data.google_maps_url !== undefined) {
+
+                if (!location_updated.includes(cameraId) && data.google_maps_url !== undefined) {
                     googleMapsElement.src = data.google_maps_url;
+                    location_updated.push(cameraId);
                 }
                 else {
                     googleMapsElement.innerHTML = "Location not found.";
