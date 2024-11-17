@@ -163,7 +163,6 @@ def get_camera_image(camera_id):
     camera = cameras_collection.find_one({"camera_id": int(camera_id)})
     
     if camera:
-        print("camera image: ", camera["image"])
         return camera["image"], 200
     else:
         abort(404, description="Image not found")
@@ -236,7 +235,7 @@ def delete_camera(camera_id):
         return redirect(url_for("login"))  # If not logged in, redirect to login
     
     # Check if the camera_id exists in the MongoDB database
-    camera = cameras_collection.find_one({"camera_id": camera_id})
+    camera = cameras_collection.find_one({"camera_id": int(camera_id)})
     
     if camera:
         # Camera found, delete it
