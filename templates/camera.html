@@ -144,23 +144,23 @@
 
         // Function to update camera information on the first upload
         async function updateCameraInfo(data) {
-            try {
-                const updateResponse = await fetch(`/camera/update/{{ camera_id }}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
+            // try {
+            //     const updateResponse = await fetch(`/camera/update/{{ camera_id }}`, {
+            //         method: 'POST',
+            //         headers: {
+            //             'Content-Type': 'application/json'
+            //         },
+            //         body: JSON.stringify(data)
+            //     });
 
-                if (updateResponse.ok) {
-                    console.log('Camera information updated successfully.');
-                } else {
-                    console.error('Failed to update camera information.');
-                }
-            } catch (err) {
-                console.error('Error updating camera information:', err);
-            }
+            //     if (updateResponse.ok) {
+            //         console.log('Camera information updated successfully.');
+            //     } else {
+            //         console.error('Failed to update camera information.');
+            //     }
+            // } catch (err) {
+            //     console.error('Error updating camera information:', err);
+            // }
         }
 
         // Automatically capture and send the image every 10 seconds

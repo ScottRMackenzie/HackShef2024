@@ -136,21 +136,21 @@
 
         // Fetch fire prediction and update the UI
         function fetchPrediction(cameraId) {
-            fetch(`/predict/${cameraId}`, {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                const predictionElement = document.getElementById(`prediction-${cameraId}`);
-                if (data.fire_prob !== undefined) {
-                    predictionElement.innerHTML = `Fire Probability: ${data.fire_prob.toFixed(2)}`;
-                } else {
-                    predictionElement.innerHTML = "Prediction failed. Image not found.";
-                }
-            })
-            .catch(error => {
-                console.error("Error fetching prediction:", error);
-            });
+            // fetch(`/predict/${cameraId}`, {
+            //     method: 'POST',
+            // })
+            // .then(response => response.json())
+            // .then(data => {
+            //     const predictionElement = document.getElementById(`prediction-${cameraId}`);
+            //     if (data.fire_prob !== undefined) {
+            //         predictionElement.innerHTML = `Fire Probability: ${data.fire_prob.toFixed(2)}`;
+            //     } else {
+            //         predictionElement.innerHTML = "Prediction failed. Image not found.";
+            //     }
+            // })
+            // .catch(error => {
+            //     console.error("Error fetching prediction:", error);
+            // });
         }
 
         // Auto-refresh camera feeds every 5 seconds
