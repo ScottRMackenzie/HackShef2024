@@ -38,11 +38,10 @@
         }
 
         // Refresh every 500 milliseconds (0.5 seconds)
-        setInterval(refreshImage, 100); // Refresh every 500 ms for smooth updates
+        setInterval(refreshImage, 500); // Refresh every 500 ms for smooth updates
     </script>
 </head>
-<body onload="refreshImage()">
-    <h1>Live Camera Feed</h1>
-    <img id="cameraImage" class="loading" src="" alt="Camera Image" />
+<body onload="refreshImage()" style="margin: 0; padding: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center;">
+    <img id="cameraImage" class="loading" src="" alt="Camera Image" style="width: 100%; height: 100%; object-fit: cover;" />
 </body>
 </html>
