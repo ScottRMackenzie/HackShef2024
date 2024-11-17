@@ -251,7 +251,7 @@ def delete_camera(camera_id):
     
     if camera:
         # Camera found, delete it
-        cameras_collection.delete_one({"camera_id": camera_id})
+        cameras_collection.delete_many({"camera_id": int(camera_id)})
         return {"message": f"Camera with ID {camera_id} has been deleted."}, 200
     else:
         # Return a 404 error if the camera does not exist in the database
